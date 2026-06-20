@@ -59,11 +59,13 @@ type MyCasPool = StaticBoxPool<[u8; 256], 8, CasSlots<8>>;      // CasSlots
 ## Features
 
 - **`cas`** — enables the `CasSlots` lock-free backend (requires hardware CAS instructions).
+- **`async`** — enables `AsyncBoxPool` / `AsyncObjectPool` with `.await` support via `embassy-sync`.
 
 ## Design
 
 - Free-index chain is **separate** from `T`'s slot memory — not an intrusive free list, so slot layout is unaffected.
 - Pools must live in `static` memory; `alloc` / `request` take `&'static self`, eliminating lifetime parameters on guards — convenient for async frameworks like Embassy.
+- `BoxPool::alloc` / `ObjectPool::request` block and await when the pool is full (feature `async`).
 - `BoxGuard` supports `try_clone` (fallible, no panic on exhaustion) and `into_raw` / `from_raw` for DMA / FFI.
 
 ## License

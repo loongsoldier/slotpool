@@ -1,6 +1,6 @@
 [package]
 name = "slotpool"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 description = "Fixed-capacity object pools for no_std / embedded systems"
 license = "MIT OR Apache-2.0"
@@ -12,10 +12,12 @@ categories = ["embedded", "no-std", "memory-management"]
 
 [features]
 cas = []
+async = ["dep:embassy-sync"]
 
 [dependencies]
 critical-section = "1"
 heapless = "0.9"
+embassy-sync = { version = "0.8", optional = true }
 
 [dev-dependencies]
 critical-section = { version = "1", features = ["std"] }

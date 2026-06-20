@@ -62,5 +62,10 @@ pub mod critical;
 mod boxed;
 mod object;
 
+#[cfg(feature = "async")]
+pub mod async_boxed;
+#[cfg(feature = "async")]
+pub mod async_object;
+
 pub use boxed::{BoxGuard, BoxPool, StaticBoxPool};
 pub use object::{ObjectGuard, ObjectPool, StaticObjectPool};
