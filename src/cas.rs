@@ -26,7 +26,7 @@
 //! multi-core SMP targets, however, the full formal proof is still an open
 //! question — **review carefully or switch to the `critical` backend**.
 
-use crate::free_slots::FreeSlots;
+use crate::free_slots::{FillError, FreeSlots};
 use core::cell::UnsafeCell;
 use core::mem::MaybeUninit;
 use core::sync::atomic::{AtomicUsize, Ordering};
@@ -73,8 +73,10 @@ impl<const N: usize> FreeSlots<N> for CasSlots<N> {
         Self::new()
     }
 
-    fn fill(&self, count: usize) {
-        debug_assert!(count <= N, "fill count must not exceed capacity");
+    fn fill(&self, count: usize) -> Result<(), FillError> {
+        if count > N {
+            return Err(FillError);
+        }
 
         unsafe {
             // Build the chain: count-1 → count-2 → … → 0 → sentinel.
@@ -96,6 +98,7 @@ impl<const N: usize> FreeSlots<N> for CasSlots<N> {
             sentinel::<N>()
         };
         self.head.store(head_val, Ordering::Release);
+        Ok(())
     }
 
     fn take(&self) -> Option<usize> {

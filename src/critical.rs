@@ -7,7 +7,7 @@
 //! This backend works on any target that implements `critical-section`, so
 //! it's the most portable choice and the default for `Pool`.
 
-use crate::free_slots::FreeSlots;
+use crate::free_slots::{FillError, FreeSlots};
 use core::cell::UnsafeCell;
 use critical_section::Mutex;
 use heapless::Vec;
@@ -30,7 +30,10 @@ impl<const N: usize> FreeSlots<N> for CriticalSlots<N> {
         Self::new()
     }
 
-    fn fill(&self, count: usize) {
+    fn fill(&self, count: usize) -> Result<(), FillError> {
+        if count > N {
+            return Err(FillError);
+        }
         critical_section::with(|cs| {
             // SAFETY: exclusive access inside the critical section.
             let vec = unsafe { &mut *self.inner.borrow(cs).get() };
@@ -40,6 +43,7 @@ impl<const N: usize> FreeSlots<N> for CriticalSlots<N> {
                 let _ = vec.push(i);
             }
         });
+        Ok(())
     }
 
     fn take(&self) -> Option<usize> {

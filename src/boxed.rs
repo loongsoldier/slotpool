@@ -59,7 +59,10 @@ impl<T, const N: usize, B: FreeSlots<N>> StaticBoxPool<T, N, B> {
         unsafe {
             let ptr: *mut BoxPool<T, N, B> = self.data.get().cast::<BoxPool<T, N, B>>();
             ptr.write(BoxPool::new());
-            (*ptr).free.fill(N);
+            (*ptr)
+                .free
+                .fill(N)
+                .expect("fill(N) must succeed when count == capacity");
             &*ptr
         }
     }

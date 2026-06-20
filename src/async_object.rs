@@ -9,11 +9,12 @@
 //! For ISR use, prefer the sync [`ObjectPool`](crate::ObjectPool) directly.
 
 use core::cell::UnsafeCell;
-use core::mem::MaybeUninit;
+use core::mem::{ManuallyDrop, MaybeUninit};
 use core::ops::{Deref, DerefMut};
 
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-use embassy_sync::signal::Signal;
+use embassy_sync::semaphore::FairSemaphore;
+use embassy_sync::semaphore::Semaphore;
 
 use crate::critical::CriticalSlots;
 use crate::free_slots::FreeSlots;
@@ -22,10 +23,10 @@ use crate::object::{ObjectGuard, ObjectPool};
 /// Async variant of [`ObjectPool`](crate::ObjectPool) — `request` awaits when full.
 pub struct AsyncObjectPool<T, const N: usize, B = CriticalSlots<N>> {
     inner: ObjectPool<T, N, B>,
-    signal: Signal<CriticalSectionRawMutex, ()>,
+    wake: FairSemaphore<CriticalSectionRawMutex, N>,
 }
 
-// SAFETY: inner is Sync, Signal is Sync.
+// SAFETY: inner is Sync, FairSemaphore is Sync.
 unsafe impl<T, const N: usize, B: FreeSlots<N>> Sync for AsyncObjectPool<T, N, B> {}
 
 /// Static storage for an [`AsyncObjectPool`].
@@ -60,9 +61,13 @@ impl<T: Clone, const N: usize, B: FreeSlots<N>> StaticAsyncObjectPool<T, N, B> {
                     slots: UnsafeCell::new(MaybeUninit::uninit()),
                     free: B::new(),
                 },
-                signal: Signal::new(),
+                wake: FairSemaphore::new(0),
             });
-            (*ptr).inner.free.fill(N);
+            (*ptr)
+                .inner
+                .free
+                .fill(N)
+                .expect("fill(N) must succeed when count == capacity");
             for i in 0..N {
                 (*ptr).inner.slot_mut_ptr(i).write(init.clone());
             }
@@ -78,11 +83,17 @@ impl<T, const N: usize, B: FreeSlots<N>> AsyncObjectPool<T, N, B> {
             match self.inner.request() {
                 Some(guard) => {
                     return AsyncObjectGuard {
-                        guard: Some(guard),
-                        signal: &self.signal,
+                        guard: ManuallyDrop::new(guard),
+                        wake: &self.wake,
                     };
                 }
-                None => self.signal.wait().await,
+                None => {
+                    let _ = self
+                        .wake
+                        .acquire(1)
+                        .await
+                        .expect("semaphore acquire(1) must not fail");
+                }
             }
         }
     }
@@ -92,29 +103,31 @@ impl<T, const N: usize, B: FreeSlots<N>> AsyncObjectPool<T, N, B> {
 /// but wakes a waiter on drop.
 #[must_use]
 pub struct AsyncObjectGuard<T: 'static, const N: usize, B: FreeSlots<N> + 'static> {
-    guard: Option<ObjectGuard<T, N, B>>,
-    signal: &'static Signal<CriticalSectionRawMutex, ()>,
+    guard: ManuallyDrop<ObjectGuard<T, N, B>>,
+    wake: &'static FairSemaphore<CriticalSectionRawMutex, N>,
 }
 
 impl<T, const N: usize, B: FreeSlots<N>> Deref for AsyncObjectGuard<T, N, B> {
     type Target = T;
     fn deref(&self) -> &T {
-        self.guard.as_ref().unwrap()
+        &self.guard
     }
 }
 
 impl<T, const N: usize, B: FreeSlots<N>> DerefMut for AsyncObjectGuard<T, N, B> {
     fn deref_mut(&mut self) -> &mut T {
-        self.guard.as_mut().unwrap()
+        &mut self.guard
     }
 }
 
 impl<T, const N: usize, B: FreeSlots<N>> Drop for AsyncObjectGuard<T, N, B> {
     fn drop(&mut self) {
         // 1. Release the slot (no destructor — data persists).
-        drop(self.guard.take());
+        unsafe {
+            ManuallyDrop::drop(&mut self.guard);
+        }
         // 2. Wake one waiter.
-        self.signal.signal(());
+        self.wake.release(1);
     }
 }
 

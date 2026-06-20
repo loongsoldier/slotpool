@@ -62,7 +62,7 @@ impl<T: Clone, const N: usize, B: FreeSlots<N>> StaticObjectPool<T, N, B> {
                 slots: UnsafeCell::new(MaybeUninit::uninit()),
                 free: B::new(),
             });
-            (*ptr).free.fill(N);
+            (*ptr).free.fill(N).expect("fill(N) must succeed when count == capacity");
             for i in 0..N {
                 (*ptr).slot_mut_ptr(i).write(init.clone());
             }

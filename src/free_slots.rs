@@ -21,7 +21,7 @@ pub trait FreeSlots<const N: usize>: Sync {
 
     /// Fill with indices `0..count`.  `count` must be `<= N`.
     /// Must only be called once, during initialisation.
-    fn fill(&self, count: usize);
+    fn fill(&self, count: usize) -> Result<(), FillError>;
 
     /// Take a free index; returns `None` when exhausted.
     /// Safe to call concurrently from any execution context.
@@ -31,3 +31,7 @@ pub trait FreeSlots<const N: usize>: Sync {
     /// Safe to call concurrently from any execution context.
     fn put(&self, idx: usize);
 }
+
+/// Error returned by [`FreeSlots::fill`] when `count` exceeds capacity `N`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FillError;
