@@ -1,0 +1,20 @@
+[package]
+name = "slotpool"
+version = "0.1.0"
+edition = "2024"
+description = "Fixed-capacity object pools for no_std / embedded systems"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/loongsoldier/slotpool"
+readme = "README.md"
+keywords = ["pool", "object-pool", "no-std", "embedded", "static"]
+categories = ["embedded", "no-std", "memory-management"]
+
+[features]
+cas = []
+
+[dependencies]
+critical-section = "1"
+heapless = "0.9"
+
+[dev-dependencies]
+critical-section = { version = "1", features = ["std"] }
